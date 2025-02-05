@@ -32,7 +32,7 @@ func getIPInfo(ip string) (string, bool) {
 }
 
 func getWeather(city string) (string, error) {
-	url := fmt.Sprintf("http://wttr.in/%s?format=%%C+%%t&lang=ru", city)
+	url := fmt.Sprintf("http://wttr.in/%s?format=%%C+%%t&lang=en", city)
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", err
