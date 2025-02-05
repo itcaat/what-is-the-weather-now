@@ -47,30 +47,35 @@ func getWeather(city string) (string, error) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	ip := strings.Split(r.RemoteAddr, ":")[0]
+	// Get client IP from Cloudflare headers
+	ip := r.Header.Get("CF-Connecting-IP")
+	if ip == "" {
+		ip = strings.Split(r.RemoteAddr, ":")[0] // Fallback to RemoteAddr if header is missing
+	}
+
 	city, detected := getIPInfo(ip)
 
 	weather, err := getWeather(city)
 	if err != nil {
-		http.Error(w, "Cannot get weather", http.StatusInternalServerError)
+		http.Error(w, "Failed to fetch weather", http.StatusInternalServerError)
 		return
 	}
 
 	message := ""
 	if !detected {
-		message = "(city not detected)"
+		message = "(Location could not be determined, using Moscow as default)"
 	}
 
 	html := fmt.Sprintf(`
-		<html>
-		<head><title>Погода</title><meta charset="UTF-8"></head>
-		<body>
-			<h1>Ваш IP: %s</h1>
-			<h2>Погода в %s %s</h2>
-			<p>%s</p>
-		</body>
-		</html>
-	`, ip, city, message, weather)
+        <html>
+        <head><title>Weather</title><meta charset="UTF-8"></head>
+        <body>
+            <h1>Your IP: %s</h1>
+            <h2>Weather in %s %s</h2>
+            <p>%s</p>
+        </body>
+        </html>
+    `, ip, city, message, weather)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
