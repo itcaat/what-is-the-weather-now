@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/itcaat/what-it-the-weather-now/cache"
+	"github.com/itcaat/what-is-the-weather-now/cache"
 )
 
 var weatherCache = cache.NewCache()

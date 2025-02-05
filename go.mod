@@ -1,4 +1,4 @@
-module github.com/itcaat/what-it-the-weather-now
+module github.com/itcaat/what-is-the-weather-now
 
 go 1.23.3
 

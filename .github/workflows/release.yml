@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  appName: what-it-the-weather-now
+  appName: what-is-the-weather-now
 
 jobs:
   version:

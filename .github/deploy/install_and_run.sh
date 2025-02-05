@@ -1,8 +1,8 @@
 #!/bin/bash
 
-REPO="itcaat/what-it-the-weather-now"
-INSTALL_DIR="$HOME/what-it-the-weather-now"
-BIN_NAME="what-it-the-weather-now-linux-arm64"
+REPO="itcaat/what-is-the-weather-now"
+INSTALL_DIR="$HOME/what-is-the-weather-now"
+BIN_NAME="what-is-the-weather-now-linux-arm64"
 ZIP_FILE="$BIN_NAME.zip"
 PID_FILE="$INSTALL_DIR/app.pid"
 VERSION_FILE="$INSTALL_DIR/version"

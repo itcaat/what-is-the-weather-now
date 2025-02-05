@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/itcaat/what-it-the-weather-now/cache"
-	"github.com/itcaat/what-it-the-weather-now/weather"
+	"github.com/itcaat/what-is-the-weather-now/cache"
+	"github.com/itcaat/what-is-the-weather-now/weather"
 )
 
 var ipCache = cache.NewCache()

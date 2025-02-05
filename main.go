@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/itcaat/what-it-the-weather-now/server"
+	"github.com/itcaat/what-is-the-weather-now/server"
 )
 
 func main() {
