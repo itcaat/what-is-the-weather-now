@@ -7,10 +7,27 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 type IPInfo struct {
 	City string `json:"city"`
+}
+
+type WeatherCache struct {
+	data map[string]struct {
+		weather string
+		expiry  time.Time
+	}
+	mutex sync.Mutex
+}
+
+var cache = WeatherCache{
+	data: make(map[string]struct {
+		weather string
+		expiry  time.Time
+	}),
 }
 
 func getIPInfo(ip string) (string, bool) {
@@ -31,19 +48,39 @@ func getIPInfo(ip string) (string, bool) {
 	return info.City, true
 }
 
-func getWeather(city string) (string, error) {
+func getWeather(city string) (string, bool, time.Duration) {
+	cache.mutex.Lock()
+	if cached, found := cache.data[city]; found && time.Now().Before(cached.expiry) {
+		remainingTTL := time.Until(cached.expiry)
+		cache.mutex.Unlock()
+		return cached.weather, true, remainingTTL
+	}
+	cache.mutex.Unlock()
+
 	url := fmt.Sprintf("http://wttr.in/%s?format=%%C+%%t&lang=en", city)
 	resp, err := http.Get(url)
 	if err != nil {
-		return "", err
+		return "", false, 0
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", false, 0
 	}
-	return string(body), nil
+
+	weather := string(body)
+
+	ttl := 10 * time.Minute
+
+	cache.mutex.Lock()
+	cache.data[city] = struct {
+		weather string
+		expiry  time.Time
+	}{weather, time.Now().Add(ttl)}
+	cache.mutex.Unlock()
+
+	return weather, false, ttl
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -55,8 +92,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	city, detected := getIPInfo(ip)
 
-	weather, err := getWeather(city)
-	if err != nil {
+	weather, cached, ttl := getWeather(city)
+	if weather == "" {
 		http.Error(w, "Failed to fetch weather", http.StatusInternalServerError)
 		return
 	}
@@ -66,16 +103,21 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		message = "(Location could not be determined, using Moscow as default)"
 	}
 
+	cacheInfo := ""
+	if cached {
+		cacheInfo = fmt.Sprintf("(Cached data, TTL remaining: %v)", ttl.Round(time.Second))
+	}
+
 	html := fmt.Sprintf(`
 		<html>
 		<head><title>Weather</title><meta charset="UTF-8"></head>
 		<body>
 			<h1>Your IP: %s</h1>
 			<h2>Weather in %s %s</h2>
-			<p>%s</p>
+			<p>%s %s</p>
 		</body>
 		</html>
-	`, ip, city, message, weather)
+	`, ip, city, message, weather, cacheInfo)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
