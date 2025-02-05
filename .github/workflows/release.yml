@@ -1,0 +1,107 @@
+name: Build, Tag, and Release
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  appName: what-it-the-weather-now
+
+jobs:
+  version:
+    outputs:
+      app_version: ${{ steps.version.outputs.new_tag }}
+      changelog: ${{ steps.version.outputs.changelog }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        id: version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    - name: Set environment variables
+      run: |
+        echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
+        echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Build
+      run: |
+        go build -o ${{ env.appName }}-${{ matrix.goos }}-${{ matrix.goarch }}
+
+    - name: Package binary into a ZIP file
+      run: |
+        zip -j ${{ env.appName }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip ${{ env.appName }}-${{ matrix.goos }}-${{ matrix.goarch }}
+
+    - name: List generated files
+      run: ls -lh ${{ env.appName }}-*.zip
+
+    - name: Upload ZIP artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.appName }}-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: ${{ env.appName }}-${{ matrix.goos }}-${{ matrix.goarch }}.zip
+
+  release:
+    needs: 
+      - version
+      - build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ${{ env.appName }}-*
+        path: my-artifact
+        merge-multiple: true
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: ncipollo/release-action@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag: ${{ needs.version.outputs.app_version }}
+        name: Release ${{ needs.version.outputs.app_version }}
+        body: ${{ needs.version.outputs.changelog }}
+        generateReleaseNotes: true
+
+    - name: List downloaded files
+      run: ls -lh my-artifact
+
+    - name: Upload all release artifacts
+      run: |
+        for file in ./my-artifact/*.zip; do
+          echo "Uploading $file"
+          gh release upload ${{ needs.version.outputs.app_version }} "$file"
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
