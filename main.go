@@ -16,7 +16,7 @@ type IPInfo struct {
 func getIPInfo(ip string) (string, bool) {
 	resp, err := http.Get("http://ip-api.com/json/" + ip)
 	if err != nil {
-		return "Moscow", false // Если не удалось определить, используем Москву
+		return "Moscow", false // Default to Moscow if location cannot be determined
 	}
 	defer resp.Body.Close()
 
@@ -47,7 +47,7 @@ func getWeather(city string) (string, error) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	// Get client IP from Cloudflare headers
+	// Determine client IP, checking Cloudflare headers first
 	ip := r.Header.Get("CF-Connecting-IP")
 	if ip == "" {
 		ip = strings.Split(r.RemoteAddr, ":")[0] // Fallback to RemoteAddr if header is missing
@@ -67,15 +67,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	html := fmt.Sprintf(`
-        <html>
-        <head><title>Weather</title><meta charset="UTF-8"></head>
-        <body>
-            <h1>Your IP: %s</h1>
-            <h2>Weather in %s %s</h2>
-            <p>%s</p>
-        </body>
-        </html>
-    `, ip, city, message, weather)
+		<html>
+		<head><title>Weather</title><meta charset="UTF-8"></head>
+		<body>
+			<h1>Your IP: %s</h1>
+			<h2>Weather in %s %s</h2>
+			<p>%s</p>
+		</body>
+		</html>
+	`, ip, city, message, weather)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
@@ -87,6 +87,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	fmt.Println("Lister port:", port)
+	fmt.Println("Server started on port:", port)
 	http.ListenAndServe(":"+port, nil)
 }
