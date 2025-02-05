@@ -15,22 +15,32 @@ type IPInfo struct {
 	City string `json:"city"`
 }
 
+type CacheEntry struct {
+	data   string
+	expiry time.Time
+}
+
 type WeatherCache struct {
-	data map[string]struct {
-		weather string
-		expiry  time.Time
-	}
+	data  map[string]CacheEntry
 	mutex sync.Mutex
 }
 
-var cache = WeatherCache{
-	data: make(map[string]struct {
-		weather string
-		expiry  time.Time
-	}),
+var weatherCache = WeatherCache{
+	data: make(map[string]CacheEntry),
+}
+
+var ipCache = WeatherCache{
+	data: make(map[string]CacheEntry),
 }
 
 func getIPInfo(ip string) (string, bool) {
+	ipCache.mutex.Lock()
+	if cached, found := ipCache.data[ip]; found && time.Now().Before(cached.expiry) {
+		ipCache.mutex.Unlock()
+		return cached.data, true
+	}
+	ipCache.mutex.Unlock()
+
 	resp, err := http.Get("http://ip-api.com/json/" + ip)
 	if err != nil {
 		return "Moscow", false // Default to Moscow if location cannot be determined
@@ -45,17 +55,22 @@ func getIPInfo(ip string) (string, bool) {
 	if info.City == "" {
 		return "Moscow", false
 	}
+
+	ipCache.mutex.Lock()
+	ipCache.data[ip] = CacheEntry{info.City, time.Now().Add(24 * time.Hour)}
+	ipCache.mutex.Unlock()
+
 	return info.City, true
 }
 
 func getWeather(city string) (string, bool, time.Duration) {
-	cache.mutex.Lock()
-	if cached, found := cache.data[city]; found && time.Now().Before(cached.expiry) {
+	weatherCache.mutex.Lock()
+	if cached, found := weatherCache.data[city]; found && time.Now().Before(cached.expiry) {
 		remainingTTL := time.Until(cached.expiry)
-		cache.mutex.Unlock()
-		return cached.weather, true, remainingTTL
+		weatherCache.mutex.Unlock()
+		return cached.data, true, remainingTTL
 	}
-	cache.mutex.Unlock()
+	weatherCache.mutex.Unlock()
 
 	url := fmt.Sprintf("http://wttr.in/%s?format=%%C+%%t&lang=en", city)
 	resp, err := http.Get(url)
@@ -70,15 +85,11 @@ func getWeather(city string) (string, bool, time.Duration) {
 	}
 
 	weather := string(body)
-
 	ttl := 10 * time.Minute
 
-	cache.mutex.Lock()
-	cache.data[city] = struct {
-		weather string
-		expiry  time.Time
-	}{weather, time.Now().Add(ttl)}
-	cache.mutex.Unlock()
+	weatherCache.mutex.Lock()
+	weatherCache.data[city] = CacheEntry{weather, time.Now().Add(ttl)}
+	weatherCache.mutex.Unlock()
 
 	return weather, false, ttl
 }
