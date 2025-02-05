@@ -7,39 +7,23 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/patrickmn/go-cache"
 )
 
 type IPInfo struct {
 	City string `json:"city"`
 }
 
-type CacheEntry struct {
-	data   string
-	expiry time.Time
-}
-
-type WeatherCache struct {
-	data  map[string]CacheEntry
-	mutex sync.Mutex
-}
-
-var weatherCache = WeatherCache{
-	data: make(map[string]CacheEntry),
-}
-
-var ipCache = WeatherCache{
-	data: make(map[string]CacheEntry),
-}
+var weatherCache = cache.New(10*time.Minute, 15*time.Minute)
+var ipCache = cache.New(24*time.Hour, 30*time.Minute)
 
 func getIPInfo(ip string) (string, bool) {
-	ipCache.mutex.Lock()
-	if cached, found := ipCache.data[ip]; found && time.Now().Before(cached.expiry) {
-		ipCache.mutex.Unlock()
-		return cached.data, true
+	// Check if IP is already cached
+	if cachedCity, found := ipCache.Get(ip); found {
+		return cachedCity.(string), true
 	}
-	ipCache.mutex.Unlock()
 
 	resp, err := http.Get("http://ip-api.com/json/" + ip)
 	if err != nil {
@@ -56,21 +40,22 @@ func getIPInfo(ip string) (string, bool) {
 		return "Moscow", false
 	}
 
-	ipCache.mutex.Lock()
-	ipCache.data[ip] = CacheEntry{info.City, time.Now().Add(24 * time.Hour)}
-	ipCache.mutex.Unlock()
+	// Store in cache
+	ipCache.Set(ip, info.City, cache.DefaultExpiration)
 
 	return info.City, true
 }
 
 func getWeather(city string) (string, bool, time.Duration) {
-	weatherCache.mutex.Lock()
-	if cached, found := weatherCache.data[city]; found && time.Now().Before(cached.expiry) {
-		remainingTTL := time.Until(cached.expiry)
-		weatherCache.mutex.Unlock()
-		return cached.data, true, remainingTTL
+	// Check if weather data is cached
+	if cachedWeather, found := weatherCache.Get(city); found {
+		item := cachedWeather.(struct {
+			weather string
+			expiry  time.Time
+		})
+		ttl := time.Until(item.expiry)
+		return item.weather, true, ttl
 	}
-	weatherCache.mutex.Unlock()
 
 	url := fmt.Sprintf("http://wttr.in/%s?format=%%C+%%t&lang=en", city)
 	resp, err := http.Get(url)
@@ -87,9 +72,11 @@ func getWeather(city string) (string, bool, time.Duration) {
 	weather := string(body)
 	ttl := 10 * time.Minute
 
-	weatherCache.mutex.Lock()
-	weatherCache.data[city] = CacheEntry{weather, time.Now().Add(ttl)}
-	weatherCache.mutex.Unlock()
+	// Store in cache
+	weatherCache.Set(city, struct {
+		weather string
+		expiry  time.Time
+	}{weather, time.Now().Add(ttl)}, cache.DefaultExpiration)
 
 	return weather, false, ttl
 }
