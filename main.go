@@ -16,7 +16,7 @@ type IPInfo struct {
 func getIPInfo(ip string) (string, bool) {
 	resp, err := http.Get("http://ip-api.com/json/" + ip)
 	if err != nil {
-		return "Moscow", false // Если не удалось определить, используем Москву
+		return "Moscow", false
 	}
 	defer resp.Body.Close()
 
