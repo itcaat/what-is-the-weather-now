@@ -6,7 +6,6 @@ BIN_NAME="what-is-the-weather-now-linux-arm64"
 ZIP_FILE="$BIN_NAME.zip"
 PID_FILE="$INSTALL_DIR/app.pid"
 VERSION_FILE="$INSTALL_DIR/version"
-
 FORCE_UPDATE=false
 
 # Check if --force is used
@@ -48,8 +47,16 @@ echo "Latest release: $LATEST_RELEASE"
 if [[ -f "$VERSION_FILE" && "$FORCE_UPDATE" == false ]]; then
     INSTALLED_VERSION=$(cat "$VERSION_FILE")
     if [[ "$INSTALLED_VERSION" == "$LATEST_RELEASE" ]]; then
-        echo "You already have the latest version ($INSTALLED_VERSION). Exiting."
-        exit 0
+        echo "You already have the latest version ($INSTALLED_VERSION). Checking if it's running..."
+        if [[ -f "$PID_FILE" ]]; then
+            APP_PID=$(cat "$PID_FILE")
+            if ps -p "$APP_PID" > /dev/null 2>&1; then
+                echo "Application is already running with PID $APP_PID. Exiting."
+                exit 0
+            else
+                echo "Application is not running. Restarting..."
+            fi
+        fi
     fi
 fi
 
